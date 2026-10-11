@@ -1,7 +1,12 @@
 {
-  "list": [
-    { "id": 6941070, "_id": "6acb43dd60bb7536dba668a6", "resultTruyenThong": "TAI", "dices": [6,2,4], "point": 12 },
-    { "id": 6941069, "_id": "6acb439760bb7536dba64576", "resultTruyenThong": "XIU", "dices": [1,2,3], "point": 6 }
-  ],
-  "typeStat": { "TAI": 59, "XIU": 46 }
+  "name": "tai-xiu-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
 }
