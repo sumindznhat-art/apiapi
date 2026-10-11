@@ -1,12 +1,7 @@
 {
-  "name": "tai-xiu-api",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2",
-    "cors": "^2.8.5"
-  }
+  "id": 6941071,
+  "_id": "minh_ios_le",
+  "resultTruyenThong": "TAI",
+  "dices": [3, 5, 4],
+  "point": 12
 }
