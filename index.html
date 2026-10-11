@@ -14,7 +14,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{
-    font-family:"Segoe UI",Roboto,system-ui,sans-serif;
+    font-family:"Segoe UI",Roboto,system-ui,-apple-system,sans-serif;
     background:radial-gradient(1200px 600px at 50% -10%,#1b2650 0%,var(--bg) 55%) fixed;
     color:var(--text); min-height:100vh; padding:16px;
   }
@@ -191,21 +191,12 @@
 
 <script>
 /* =========================================================
-   CẤU HÌNH — TỰ ĐỘNG DÒ ENDPOINT
+   CẤU HÌNH — CHỈ ĐỌC data.json TĨNH
    ========================================================= */
-const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-
-const ENDPOINTS = IS_LOCAL
-  ? ['/api', '/data.json']
-  : [
-      location.origin + '/api',       // Render Web Service
-      location.origin + '/data.json', // Render Static Site
-      'https://apiapi-k1ma.onrender.com' // fallback nguồn gốc
-    ];
-
-const TIMEOUT_MS  = 30000;
-const RETRY_DELAY = 6000;
-const CACHE_KEY   = 'tx_history_cache_v2';
+const ENDPOINTS = ['./data.json'];
+const TIMEOUT_MS  = 15000;
+const RETRY_DELAY = 5000;
+const CACHE_KEY   = 'tx_history_cache_v3';
 
 /* =========================================================
    DOM
@@ -273,7 +264,7 @@ function timeNow(){
 }
 
 /* =========================================================
-   GỌI API (tự dò nhiều endpoint)
+   GỌI API
    ========================================================= */
 async function fetchWithTimeout(url, ms){
   const ctrl = new AbortController();
@@ -289,25 +280,26 @@ async function fetchWithTimeout(url, ms){
 
 async function getHistory(){
   let lastError = null;
-
   for(const url of ENDPOINTS){
     try{
-      const res = await fetchWithTimeout(url, TIMEOUT_MS);
-      if(!res.ok){ lastError = `HTTP ${res.status} @ ${url}`; continue; }
+      /* Thêm timestamp để bypass cache trình duyệt */
+      const finalUrl = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+      const res = await fetchWithTimeout(finalUrl, TIMEOUT_MS);
+      if(!res.ok){ lastError = 'HTTP ' + res.status + ' @ ' + url; continue; }
 
       const text = await res.text();
       let data;
       try{ data = JSON.parse(text); }
-      catch(e){ lastError = `Không phải JSON @ ${url}`; continue; }
+      catch(e){ lastError = 'Không phải JSON @ ' + url; continue; }
 
       if(data && Array.isArray(data.list) && data.list.length){
         return data;
       }
-      lastError = `Thiếu trường 'list' @ ${url}`;
+      lastError = "Thiếu trường 'list' @ " + url;
     }catch(err){
       lastError = err.name === 'AbortError'
-        ? `Quá thời gian chờ @ ${url}`
-        : `${err.message} @ ${url}`;
+        ? 'Quá thời gian chờ @ ' + url
+        : err.message + ' @ ' + url;
     }
   }
   throw new Error(lastError || 'Không lấy được dữ liệu');
@@ -363,7 +355,7 @@ function render(data){
   el.barXiu.style.width = (100 - pTai).toFixed(1) + '%';
 
   if(s.streakLen){
-    el.statStreak.textContent = `${s.streakType} ×${s.streakLen}`;
+    el.statStreak.textContent = s.streakType + ' ×' + s.streakLen;
     el.statStreak.style.color = s.streakType === 'TAI' ? 'var(--tai2)' : 'var(--xiu2)';
   }else{
     el.statStreak.textContent = '–';
@@ -375,13 +367,13 @@ function render(data){
 
   el.latestResult.textContent = topResult;
   el.latestResult.className   = 'result ' + (topResult === 'TAI' ? 'tai' : 'xiu');
-  el.latestId.textContent     = top.id ?? '–';
-  el.latestPoint.textContent  = top.point ?? '–';
+  el.latestId.textContent     = top.id != null ? top.id : '–';
+  el.latestPoint.textContent  = top.point != null ? top.point : '–';
 
   el.latestDice.innerHTML = '';
   (top.dices || []).forEach(v => el.latestDice.appendChild(createDice(v)));
 
-  document.title = `${topResult} ${top.point ?? ''} điểm • Lịch sử Tài Xỉu`;
+  document.title = topResult + ' ' + (top.point || '') + ' điểm • Lịch sử Tài Xỉu';
 
   /* Bảng lịch sử */
   const isNewTop = lastTopId !== null && String(lastTopId) !== String(top.id);
@@ -408,11 +400,11 @@ function render(data){
 
     const tdPoint = document.createElement('td');
     tdPoint.className = 'point ' + ((item.point >= 11) ? 'hi' : 'lo');
-    tdPoint.textContent = item.point ?? '–';
+    tdPoint.textContent = item.point != null ? item.point : '–';
 
     const tdId = document.createElement('td');
     tdId.className = 'idx';
-    tdId.textContent = item.id ?? '–';
+    tdId.textContent = item.id != null ? item.id : '–';
 
     tr.append(tdIdx, tdRes, tdDice, tdPoint, tdId);
     frag.appendChild(tr);
@@ -443,7 +435,7 @@ function loadCache(){
    ========================================================= */
 let timer = null, tickTimer = null, secondsLeft = 0, loading = false;
 
-async function loadData(isAuto = false){
+async function loadData(isAuto){
   if(loading) return;
   loading = true;
   if(!isAuto) setStatus('load', 'Đang tải…');
@@ -460,20 +452,20 @@ async function loadData(isAuto = false){
       render(cached.data);
       setStatus('warn', 'Mất kết nối • dùng cache');
       showMsg('warn',
-        `⚠️ <b>Không gọi được API:</b> ${err.message}<br>
-         Đang hiển thị dữ liệu lưu gần nhất (${new Date(cached.t).toLocaleTimeString('vi-VN')}).
-         Sẽ tự thử lại.`);
+        '⚠️ <b>Không tải được data.json:</b> ' + err.message + '<br>' +
+        'Đang hiển thị dữ liệu lưu gần nhất (' +
+        new Date(cached.t).toLocaleTimeString('vi-VN') + '). Sẽ tự thử lại.');
     }else{
       setStatus('err', 'Lỗi kết nối');
       showMsg('err',
-        `❌ <b>Không lấy được dữ liệu:</b> ${err.message}<br>
-         <b>Gợi ý:</b> Server Render free có thể đang "ngủ" (503). Chờ 30–60s rồi bấm <b>Làm mới</b>.`);
+        '❌ <b>Không lấy được dữ liệu:</b> ' + err.message + '<br>' +
+        'Kiểm tra file <b>data.json</b> có nằm cùng thư mục với <b>index.html</b> không.');
       el.tbody.innerHTML =
-        `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Không có dữ liệu</td></tr>`;
+        '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Không có dữ liệu</td></tr>';
     }
     if(el.chkAuto.checked){
       clearTimeout(timer);
-      timer = setTimeout(() => loadData(true), RETRY_DELAY);
+      timer = setTimeout(function(){ loadData(true); }, RETRY_DELAY);
     }
   }finally{
     loading = false;
@@ -489,25 +481,25 @@ function restartAuto(){
   }
   const ms = Number(el.selInterval.value);
   secondsLeft = Math.round(ms / 1000);
-  el.countdown.textContent = `tự động sau ${secondsLeft}s`;
+  el.countdown.textContent = 'tự động sau ' + secondsLeft + 's';
 
-  tickTimer = setInterval(() => {
+  tickTimer = setInterval(function(){
     secondsLeft--;
     if(secondsLeft <= 0) secondsLeft = Math.round(ms / 1000);
-    el.countdown.textContent = `tự động sau ${secondsLeft}s`;
+    el.countdown.textContent = 'tự động sau ' + secondsLeft + 's';
   }, 1000);
 
-  timer = setInterval(() => loadData(true), ms);
+  timer = setInterval(function(){ loadData(true); }, ms);
 }
 
 /* =========================================================
    SỰ KIỆN
    ========================================================= */
-el.btnRefresh.addEventListener('click', () => loadData(false));
+el.btnRefresh.addEventListener('click', function(){ loadData(false); });
 el.chkAuto.addEventListener('change', restartAuto);
 el.selInterval.addEventListener('change', restartAuto);
 
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', function(){
   if(!document.hidden) loadData(true);
 });
 
